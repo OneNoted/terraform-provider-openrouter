@@ -136,7 +136,7 @@ func (r *apiKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	apiKey, err := r.client.UpdateAPIKey(ctx, keyHash(state), apiKeyRequestBody(plan))
+	apiKey, err := r.client.UpdateAPIKey(ctx, keyHash(state), apiKeyUpdateRequestBody(plan, state))
 	if err != nil {
 		resp.Diagnostics.AddError("Update OpenRouter API key failed", err.Error())
 		return
@@ -169,6 +169,18 @@ func apiKeyRequestBody(plan apiKeyModel) map[string]any {
 	addStringIfKnown(body, "limit_reset", plan.LimitReset)
 	addBoolIfKnown(body, "include_byok_in_limit", plan.IncludeBYOKInLimit)
 	addStringIfKnown(body, "expires_at", plan.ExpiresAt)
+	return body
+}
+
+func apiKeyUpdateRequestBody(plan, prior apiKeyModel) map[string]any {
+	body := map[string]any{}
+	addStringIfKnown(body, "name", plan.Name)
+	addStringIfKnown(body, "workspace_id", plan.WorkspaceID)
+	addBoolIfKnown(body, "disabled", plan.Disabled)
+	addNullableFloatForUpdate(body, "limit", plan.Limit, prior.Limit)
+	addNullableStringForUpdate(body, "limit_reset", plan.LimitReset, prior.LimitReset)
+	addBoolIfKnown(body, "include_byok_in_limit", plan.IncludeBYOKInLimit)
+	addNullableStringForUpdate(body, "expires_at", plan.ExpiresAt, prior.ExpiresAt)
 	return body
 }
 

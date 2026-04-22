@@ -68,12 +68,15 @@ func NewClient(baseURL, apiKey, userAgent string, opts ...Option) (*Client, erro
 	if strings.TrimSpace(baseURL) == "" {
 		baseURL = DefaultBaseURL
 	}
-	parsed, err := url.Parse(strings.TrimRight(baseURL, "/"))
+	parsed, err := url.Parse(strings.TrimRight(baseURL, "/") + "/")
 	if err != nil {
 		return nil, fmt.Errorf("parse base url: %w", err)
 	}
 	if parsed.Scheme == "" || parsed.Host == "" {
 		return nil, fmt.Errorf("base url must be absolute")
+	}
+	if parsed.Scheme != "https" && !isLocalhost(parsed.Hostname()) {
+		return nil, fmt.Errorf("base url must use https unless it points to localhost")
 	}
 
 	ua := DefaultUserAgent
@@ -104,6 +107,15 @@ func NewClient(baseURL, apiKey, userAgent string, opts ...Option) (*Client, erro
 		opt(c)
 	}
 	return c, nil
+}
+
+func isLocalhost(host string) bool {
+	switch strings.ToLower(host) {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	default:
+		return false
+	}
 }
 
 // APIError is returned for non-successful API responses.
@@ -167,7 +179,7 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
 			lastErr = err
-			if attempt == c.maxRetries {
+			if !isRetryableMethod(method) || attempt == c.maxRetries {
 				return err
 			}
 			if sleepErr := c.sleeper(ctx, c.backoff(attempt, nil)); sleepErr != nil {
@@ -194,7 +206,7 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 
 		apiErr := &APIError{StatusCode: resp.StatusCode, Body: strings.TrimSpace(string(responseBody))}
 		lastErr = apiErr
-		if !isRetryableStatus(resp.StatusCode) || attempt == c.maxRetries {
+		if !isRetryableMethod(method) || !isRetryableStatus(resp.StatusCode) || attempt == c.maxRetries {
 			return apiErr
 		}
 		if sleepErr := c.sleeper(ctx, c.backoff(attempt, resp)); sleepErr != nil {
@@ -206,6 +218,15 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 
 func isRetryableStatus(status int) bool {
 	return status == http.StatusTooManyRequests || status == http.StatusBadGateway || status == http.StatusServiceUnavailable || status == http.StatusGatewayTimeout || status >= 500
+}
+
+func isRetryableMethod(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodPut, http.MethodPatch, http.MethodDelete:
+		return true
+	default:
+		return false
+	}
 }
 
 func (c *Client) backoff(attempt int, resp *http.Response) time.Duration {
@@ -258,10 +279,4 @@ func pageQuery(offset, limit int, extra url.Values) url.Values {
 		q.Set("limit", strconv.Itoa(limit))
 	}
 	return q
-}
-
-func addOptionalString(body map[string]any, key, value string) {
-	if value != "" {
-		body[key] = value
-	}
 }

@@ -9,30 +9,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-func stringPointerValue(value types.String) *string {
-	if value.IsNull() || value.IsUnknown() {
-		return nil
-	}
-	v := value.ValueString()
-	return &v
-}
-
-func floatPointerValue(value types.Float64) *float64 {
-	if value.IsNull() || value.IsUnknown() {
-		return nil
-	}
-	v := value.ValueFloat64()
-	return &v
-}
-
-func boolPointerValue(value types.Bool) *bool {
-	if value.IsNull() || value.IsUnknown() {
-		return nil
-	}
-	v := value.ValueBool()
-	return &v
-}
-
 func stringValue(value *string) types.String {
 	if value == nil {
 		return types.StringNull()
@@ -58,17 +34,22 @@ func stringListValue(ctx context.Context, values []string) (types.List, diag.Dia
 	if values == nil {
 		return types.ListNull(types.StringType), nil
 	}
-	sorted := append([]string(nil), values...)
-	sort.Strings(sorted)
-	return types.ListValueFrom(ctx, types.StringType, sorted)
+	return types.ListValueFrom(ctx, types.StringType, values)
 }
 
-func setStringsFromList(ctx context.Context, list types.List) ([]string, diag.Diagnostics) {
-	if list.IsNull() || list.IsUnknown() {
+func stringSetValue(ctx context.Context, values []string) (types.Set, diag.Diagnostics) {
+	if values == nil {
+		return types.SetNull(types.StringType), nil
+	}
+	return types.SetValueFrom(ctx, types.StringType, values)
+}
+
+func stringsFromSet(ctx context.Context, set types.Set) ([]string, diag.Diagnostics) {
+	if set.IsNull() || set.IsUnknown() {
 		return nil, nil
 	}
 	var values []string
-	diags := list.ElementsAs(ctx, &values, false)
+	diags := set.ElementsAs(ctx, &values, false)
 	sort.Strings(values)
 	return values, diags
 }
@@ -78,7 +59,6 @@ func addStringIfKnown(body map[string]any, key string, value types.String) {
 		return
 	}
 	if value.IsNull() {
-		body[key] = nil
 		return
 	}
 	body[key] = value.ValueString()
@@ -89,7 +69,6 @@ func addFloatIfKnown(body map[string]any, key string, value types.Float64) {
 		return
 	}
 	if value.IsNull() {
-		body[key] = nil
 		return
 	}
 	body[key] = value.ValueFloat64()
@@ -100,21 +79,16 @@ func addBoolIfKnown(body map[string]any, key string, value types.Bool) {
 		return
 	}
 	if value.IsNull() {
-		body[key] = nil
 		return
 	}
 	body[key] = value.ValueBool()
 }
 
-func addListIfKnown(ctx context.Context, body map[string]any, key string, value types.List) diag.Diagnostics {
-	if value.IsUnknown() {
+func addSetIfKnown(ctx context.Context, body map[string]any, key string, value types.Set) diag.Diagnostics {
+	if value.IsUnknown() || value.IsNull() {
 		return nil
 	}
-	if value.IsNull() {
-		body[key] = nil
-		return nil
-	}
-	values, diags := setStringsFromList(ctx, value)
+	values, diags := stringsFromSet(ctx, value)
 	if diags.HasError() {
 		return diags
 	}
@@ -131,4 +105,61 @@ func jsonString(value map[string]any) types.String {
 		return types.StringNull()
 	}
 	return types.StringValue(string(payload))
+}
+
+func addNullableStringForUpdate(body map[string]any, key string, plan, prior types.String) {
+	if plan.IsUnknown() {
+		return
+	}
+	if plan.IsNull() {
+		if !prior.IsNull() && !prior.IsUnknown() {
+			body[key] = nil
+		}
+		return
+	}
+	body[key] = plan.ValueString()
+}
+
+func addNullableFloatForUpdate(body map[string]any, key string, plan, prior types.Float64) {
+	if plan.IsUnknown() {
+		return
+	}
+	if plan.IsNull() {
+		if !prior.IsNull() && !prior.IsUnknown() {
+			body[key] = nil
+		}
+		return
+	}
+	body[key] = plan.ValueFloat64()
+}
+
+func addNullableBoolForUpdate(body map[string]any, key string, plan, prior types.Bool) {
+	if plan.IsUnknown() {
+		return
+	}
+	if plan.IsNull() {
+		if !prior.IsNull() && !prior.IsUnknown() {
+			body[key] = nil
+		}
+		return
+	}
+	body[key] = plan.ValueBool()
+}
+
+func addNullableSetForUpdate(ctx context.Context, body map[string]any, key string, plan, prior types.Set) diag.Diagnostics {
+	if plan.IsUnknown() {
+		return nil
+	}
+	if plan.IsNull() {
+		if !prior.IsNull() && !prior.IsUnknown() {
+			body[key] = nil
+		}
+		return nil
+	}
+	values, diags := stringsFromSet(ctx, plan)
+	if diags.HasError() {
+		return diags
+	}
+	body[key] = values
+	return nil
 }

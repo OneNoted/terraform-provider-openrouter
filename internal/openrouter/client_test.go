@@ -11,6 +11,35 @@ import (
 	"time"
 )
 
+func TestClientRejectsPlainHTTPForNonLocalBaseURL(t *testing.T) {
+	if _, err := NewClient("http://openrouter.example/api/v1", "management-key", ""); err == nil {
+		t.Fatal("expected non-local plaintext HTTP base URL to be rejected")
+	}
+}
+
+func TestClientDoesNotRetryPostCreate(t *testing.T) {
+	var calls int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":"transient"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(server.URL, "management-key", "", WithRetryConfig(3, time.Millisecond, time.Millisecond), WithSleeper(func(ctx context.Context, d time.Duration) error {
+		return nil
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.CreateAPIKey(context.Background(), map[string]any{"name": "ci-key"}); err == nil {
+		t.Fatal("expected create error")
+	}
+	if calls != 1 {
+		t.Fatalf("POST calls = %d, want 1", calls)
+	}
+}
+
 func TestClientSendsAuthAndUserAgent(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/workspaces" {
@@ -27,6 +56,24 @@ func TestClientSendsAuthAndUserAgent(t *testing.T) {
 	defer server.Close()
 
 	client, err := NewClient(server.URL, "management-key", "custom-agent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.ListWorkspaces(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestClientPreservesBaseURLPath(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got, want := r.URL.Path, "/api/v1/workspaces"; got != want {
+			t.Fatalf("path = %q, want %q", got, want)
+		}
+		_, _ = w.Write([]byte(`{"data":[],"total_count":0}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(server.URL+"/api/v1", "management-key", "")
 	if err != nil {
 		t.Fatal(err)
 	}

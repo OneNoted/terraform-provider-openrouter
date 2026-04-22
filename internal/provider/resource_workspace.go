@@ -123,7 +123,7 @@ func (r *workspaceResource) Update(ctx context.Context, req resource.UpdateReque
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	workspace, err := r.client.UpdateWorkspace(ctx, state.ID.ValueString(), workspaceRequestBody(plan))
+	workspace, err := r.client.UpdateWorkspace(ctx, state.ID.ValueString(), workspaceUpdateRequestBody(plan, state))
 	if err != nil {
 		resp.Diagnostics.AddError("Update OpenRouter workspace failed", err.Error())
 		return
@@ -155,6 +155,17 @@ func workspaceRequestBody(plan workspaceModel) map[string]any {
 	addStringIfKnown(body, "default_text_model", plan.DefaultTextModel)
 	addStringIfKnown(body, "default_image_model", plan.DefaultImageModel)
 	addStringIfKnown(body, "default_provider_sort", plan.DefaultProviderSort)
+	return body
+}
+
+func workspaceUpdateRequestBody(plan, prior workspaceModel) map[string]any {
+	body := map[string]any{}
+	addStringIfKnown(body, "name", plan.Name)
+	addStringIfKnown(body, "slug", plan.Slug)
+	addNullableStringForUpdate(body, "description", plan.Description, prior.Description)
+	addNullableStringForUpdate(body, "default_text_model", plan.DefaultTextModel, prior.DefaultTextModel)
+	addNullableStringForUpdate(body, "default_image_model", plan.DefaultImageModel, prior.DefaultImageModel)
+	addNullableStringForUpdate(body, "default_provider_sort", plan.DefaultProviderSort, prior.DefaultProviderSort)
 	return body
 }
 

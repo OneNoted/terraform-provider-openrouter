@@ -31,6 +31,6 @@ provider "openrouter" {
 
 ### Optional
 
-- `base_url` (String) OpenRouter API base URL. Defaults to `https://openrouter.ai/api/v1`.
+- `base_url` (String) OpenRouter API base URL. Must use HTTPS unless pointing at localhost. Defaults to `https://openrouter.ai/api/v1`.
 - `management_api_key` (String, Sensitive) OpenRouter Management API key. May also be set with `OPENROUTER_MANAGEMENT_API_KEY` or `OPENROUTER_API_KEY`.
 - `user_agent` (String) Optional user-agent suffix appended to the provider default.

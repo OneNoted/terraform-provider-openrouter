@@ -33,12 +33,12 @@ resource "openrouter_guardrail" "example" {
 
 ### Optional
 
-- `allowed_models` (List of String) Optional allowlist of model slugs/canonical slugs.
-- `allowed_providers` (List of String) Optional allowlist of provider IDs.
+- `allowed_models` (Set of String) Optional allowlist of model slugs/canonical slugs.
+- `allowed_providers` (Set of String) Optional allowlist of provider IDs.
 - `description` (String) Guardrail description.
 - `enforce_zdr` (Boolean) Whether zero-data-retention providers are required.
-- `ignored_models` (List of String) Optional list of model slugs/canonical slugs to exclude from routing.
-- `ignored_providers` (List of String) Optional list of provider IDs to exclude from routing.
+- `ignored_models` (Set of String) Optional list of model slugs/canonical slugs to exclude from routing.
+- `ignored_providers` (Set of String) Optional list of provider IDs to exclude from routing.
 - `limit_usd` (Number) Spending limit in USD.
 - `reset_interval` (String) Budget reset interval (`daily`, `weekly`, or `monthly`).
 - `workspace_id` (String) Workspace ID containing the guardrail. Defaults to OpenRouter's default workspace if omitted.

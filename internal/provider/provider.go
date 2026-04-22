@@ -49,7 +49,7 @@ func (p *openRouterProvider) Schema(_ context.Context, _ provider.SchemaRequest,
 			},
 			"base_url": providerschema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: fmt.Sprintf("OpenRouter API base URL. Defaults to `%s`.", openrouter.DefaultBaseURL),
+				MarkdownDescription: fmt.Sprintf("OpenRouter API base URL. Must use HTTPS unless pointing at localhost. Defaults to `%s`.", openrouter.DefaultBaseURL),
 			},
 			"user_agent": providerschema.StringAttribute{
 				Optional:            true,

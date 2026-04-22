@@ -27,10 +27,10 @@ type guardrailModel struct {
 	Name             types.String  `tfsdk:"name"`
 	WorkspaceID      types.String  `tfsdk:"workspace_id"`
 	Description      types.String  `tfsdk:"description"`
-	AllowedModels    types.List    `tfsdk:"allowed_models"`
-	AllowedProviders types.List    `tfsdk:"allowed_providers"`
-	IgnoredModels    types.List    `tfsdk:"ignored_models"`
-	IgnoredProviders types.List    `tfsdk:"ignored_providers"`
+	AllowedModels    types.Set     `tfsdk:"allowed_models"`
+	AllowedProviders types.Set     `tfsdk:"allowed_providers"`
+	IgnoredModels    types.Set     `tfsdk:"ignored_models"`
+	IgnoredProviders types.Set     `tfsdk:"ignored_providers"`
 	EnforceZDR       types.Bool    `tfsdk:"enforce_zdr"`
 	LimitUSD         types.Float64 `tfsdk:"limit_usd"`
 	ResetInterval    types.String  `tfsdk:"reset_interval"`
@@ -64,10 +64,10 @@ func (r *guardrailResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 			"name":              rschema.StringAttribute{Required: true, MarkdownDescription: "Guardrail name."},
 			"workspace_id":      rschema.StringAttribute{Optional: true, Computed: true, MarkdownDescription: "Workspace ID containing the guardrail. Defaults to OpenRouter's default workspace if omitted."},
 			"description":       rschema.StringAttribute{Optional: true, MarkdownDescription: "Guardrail description."},
-			"allowed_models":    rschema.ListAttribute{Optional: true, ElementType: types.StringType, MarkdownDescription: "Optional allowlist of model slugs/canonical slugs."},
-			"allowed_providers": rschema.ListAttribute{Optional: true, ElementType: types.StringType, MarkdownDescription: "Optional allowlist of provider IDs."},
-			"ignored_models":    rschema.ListAttribute{Optional: true, ElementType: types.StringType, MarkdownDescription: "Optional list of model slugs/canonical slugs to exclude from routing."},
-			"ignored_providers": rschema.ListAttribute{Optional: true, ElementType: types.StringType, MarkdownDescription: "Optional list of provider IDs to exclude from routing."},
+			"allowed_models":    rschema.SetAttribute{Optional: true, ElementType: types.StringType, MarkdownDescription: "Optional allowlist of model slugs/canonical slugs."},
+			"allowed_providers": rschema.SetAttribute{Optional: true, ElementType: types.StringType, MarkdownDescription: "Optional allowlist of provider IDs."},
+			"ignored_models":    rschema.SetAttribute{Optional: true, ElementType: types.StringType, MarkdownDescription: "Optional list of model slugs/canonical slugs to exclude from routing."},
+			"ignored_providers": rschema.SetAttribute{Optional: true, ElementType: types.StringType, MarkdownDescription: "Optional list of provider IDs to exclude from routing."},
 			"enforce_zdr":       rschema.BoolAttribute{Optional: true, Computed: true, MarkdownDescription: "Whether zero-data-retention providers are required."},
 			"limit_usd":         rschema.Float64Attribute{Optional: true, MarkdownDescription: "Spending limit in USD."},
 			"reset_interval":    rschema.StringAttribute{Optional: true, MarkdownDescription: "Budget reset interval (`daily`, `weekly`, or `monthly`)."},
@@ -124,7 +124,7 @@ func (r *guardrailResource) Update(ctx context.Context, req resource.UpdateReque
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	body, diags := guardrailRequestBody(ctx, plan)
+	body, diags := guardrailUpdateRequestBody(ctx, plan, state)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -162,27 +162,43 @@ func guardrailRequestBody(ctx context.Context, plan guardrailModel) (map[string]
 	addFloatIfKnown(body, "limit_usd", plan.LimitUSD)
 	addStringIfKnown(body, "reset_interval", plan.ResetInterval)
 	var diags diag.Diagnostics
-	diags.Append(addListIfKnown(ctx, body, "allowed_models", plan.AllowedModels)...)
-	diags.Append(addListIfKnown(ctx, body, "allowed_providers", plan.AllowedProviders)...)
-	diags.Append(addListIfKnown(ctx, body, "ignored_models", plan.IgnoredModels)...)
-	diags.Append(addListIfKnown(ctx, body, "ignored_providers", plan.IgnoredProviders)...)
+	diags.Append(addSetIfKnown(ctx, body, "allowed_models", plan.AllowedModels)...)
+	diags.Append(addSetIfKnown(ctx, body, "allowed_providers", plan.AllowedProviders)...)
+	diags.Append(addSetIfKnown(ctx, body, "ignored_models", plan.IgnoredModels)...)
+	diags.Append(addSetIfKnown(ctx, body, "ignored_providers", plan.IgnoredProviders)...)
+	return body, diags
+}
+
+func guardrailUpdateRequestBody(ctx context.Context, plan, prior guardrailModel) (map[string]any, diag.Diagnostics) {
+	body := map[string]any{}
+	addStringIfKnown(body, "name", plan.Name)
+	addStringIfKnown(body, "workspace_id", plan.WorkspaceID)
+	addNullableStringForUpdate(body, "description", plan.Description, prior.Description)
+	addNullableBoolForUpdate(body, "enforce_zdr", plan.EnforceZDR, prior.EnforceZDR)
+	addNullableFloatForUpdate(body, "limit_usd", plan.LimitUSD, prior.LimitUSD)
+	addStringIfKnown(body, "reset_interval", plan.ResetInterval)
+	var diags diag.Diagnostics
+	diags.Append(addNullableSetForUpdate(ctx, body, "allowed_models", plan.AllowedModels, prior.AllowedModels)...)
+	diags.Append(addNullableSetForUpdate(ctx, body, "allowed_providers", plan.AllowedProviders, prior.AllowedProviders)...)
+	diags.Append(addNullableSetForUpdate(ctx, body, "ignored_models", plan.IgnoredModels, prior.IgnoredModels)...)
+	diags.Append(addNullableSetForUpdate(ctx, body, "ignored_providers", plan.IgnoredProviders, prior.IgnoredProviders)...)
 	return body, diags
 }
 
 func guardrailModelFromAPI(ctx context.Context, guardrail openrouter.Guardrail, prior guardrailModel) guardrailModel {
-	allowedModels, diags := stringListValue(ctx, guardrail.AllowedModels)
+	allowedModels, diags := stringSetValue(ctx, guardrail.AllowedModels)
 	if diags.HasError() {
 		allowedModels = prior.AllowedModels
 	}
-	allowedProviders, diags := stringListValue(ctx, guardrail.AllowedProviders)
+	allowedProviders, diags := stringSetValue(ctx, guardrail.AllowedProviders)
 	if diags.HasError() {
 		allowedProviders = prior.AllowedProviders
 	}
-	ignoredModels, diags := stringListValue(ctx, guardrail.IgnoredModels)
+	ignoredModels, diags := stringSetValue(ctx, guardrail.IgnoredModels)
 	if diags.HasError() {
 		ignoredModels = prior.IgnoredModels
 	}
-	ignoredProviders, diags := stringListValue(ctx, guardrail.IgnoredProviders)
+	ignoredProviders, diags := stringSetValue(ctx, guardrail.IgnoredProviders)
 	if diags.HasError() {
 		ignoredProviders = prior.IgnoredProviders
 	}
