@@ -7,6 +7,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	rschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/openrouter/terraform-provider-openrouter/internal/openrouter"
@@ -62,13 +65,13 @@ func (r *guardrailResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 		Attributes: map[string]rschema.Attribute{
 			"id":                rschema.StringAttribute{Computed: true, MarkdownDescription: "OpenRouter guardrail UUID."},
 			"name":              rschema.StringAttribute{Required: true, MarkdownDescription: "Guardrail name."},
-			"workspace_id":      rschema.StringAttribute{Optional: true, Computed: true, MarkdownDescription: "Workspace ID containing the guardrail. Defaults to OpenRouter's default workspace if omitted."},
+			"workspace_id":      rschema.StringAttribute{Optional: true, Computed: true, PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown(), stringplanmodifier.RequiresReplace()}, MarkdownDescription: "Workspace ID containing the guardrail. Defaults to OpenRouter's default workspace if omitted. Changes require replacing the guardrail because OpenRouter does not support moving guardrails between workspaces."},
 			"description":       rschema.StringAttribute{Optional: true, MarkdownDescription: "Guardrail description."},
 			"allowed_models":    rschema.SetAttribute{Optional: true, ElementType: types.StringType, MarkdownDescription: "Optional allowlist of model slugs/canonical slugs."},
 			"allowed_providers": rschema.SetAttribute{Optional: true, ElementType: types.StringType, MarkdownDescription: "Optional allowlist of provider IDs."},
 			"ignored_models":    rschema.SetAttribute{Optional: true, ElementType: types.StringType, MarkdownDescription: "Optional list of model slugs/canonical slugs to exclude from routing."},
 			"ignored_providers": rschema.SetAttribute{Optional: true, ElementType: types.StringType, MarkdownDescription: "Optional list of provider IDs to exclude from routing."},
-			"enforce_zdr":       rschema.BoolAttribute{Optional: true, Computed: true, MarkdownDescription: "Whether zero-data-retention providers are required."},
+			"enforce_zdr":       rschema.BoolAttribute{Optional: true, Computed: true, PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()}, MarkdownDescription: "Whether zero-data-retention providers are required."},
 			"limit_usd":         rschema.Float64Attribute{Optional: true, MarkdownDescription: "Spending limit in USD."},
 			"reset_interval":    rschema.StringAttribute{Optional: true, MarkdownDescription: "Budget reset interval (`daily`, `weekly`, or `monthly`)."},
 			"created_at":        rschema.StringAttribute{Computed: true, MarkdownDescription: "Creation timestamp returned by OpenRouter."},
@@ -78,6 +81,10 @@ func (r *guardrailResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 }
 
 func (r *guardrailResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	if r.client == nil {
+		addProviderNotConfiguredError(&resp.Diagnostics)
+		return
+	}
 	var plan guardrailModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
@@ -98,6 +105,10 @@ func (r *guardrailResource) Create(ctx context.Context, req resource.CreateReque
 }
 
 func (r *guardrailResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	if r.client == nil {
+		addProviderNotConfiguredError(&resp.Diagnostics)
+		return
+	}
 	var state guardrailModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
@@ -117,6 +128,10 @@ func (r *guardrailResource) Read(ctx context.Context, req resource.ReadRequest, 
 }
 
 func (r *guardrailResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	if r.client == nil {
+		addProviderNotConfiguredError(&resp.Diagnostics)
+		return
+	}
 	var plan guardrailModel
 	var state guardrailModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -139,6 +154,10 @@ func (r *guardrailResource) Update(ctx context.Context, req resource.UpdateReque
 }
 
 func (r *guardrailResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	if r.client == nil {
+		addProviderNotConfiguredError(&resp.Diagnostics)
+		return
+	}
 	var state guardrailModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
@@ -172,11 +191,10 @@ func guardrailRequestBody(ctx context.Context, plan guardrailModel) (map[string]
 func guardrailUpdateRequestBody(ctx context.Context, plan, prior guardrailModel) (map[string]any, diag.Diagnostics) {
 	body := map[string]any{}
 	addStringIfKnown(body, "name", plan.Name)
-	addStringIfKnown(body, "workspace_id", plan.WorkspaceID)
 	addNullableStringForUpdate(body, "description", plan.Description, prior.Description)
 	addNullableBoolForUpdate(body, "enforce_zdr", plan.EnforceZDR, prior.EnforceZDR)
 	addNullableFloatForUpdate(body, "limit_usd", plan.LimitUSD, prior.LimitUSD)
-	addStringIfKnown(body, "reset_interval", plan.ResetInterval)
+	addNullableStringForUpdate(body, "reset_interval", plan.ResetInterval, prior.ResetInterval)
 	var diags diag.Diagnostics
 	diags.Append(addNullableSetForUpdate(ctx, body, "allowed_models", plan.AllowedModels, prior.AllowedModels)...)
 	diags.Append(addNullableSetForUpdate(ctx, body, "allowed_providers", plan.AllowedProviders, prior.AllowedProviders)...)
@@ -219,6 +237,6 @@ func guardrailModelFromAPI(ctx context.Context, guardrail openrouter.Guardrail, 
 		LimitUSD:         floatValue(guardrail.LimitUSD),
 		ResetInterval:    stringValue(guardrail.ResetInterval),
 		CreatedAt:        types.StringValue(guardrail.CreatedAt),
-		UpdatedAt:        types.StringValue(guardrail.UpdatedAt),
+		UpdatedAt:        stringValue(guardrail.UpdatedAt),
 	}
 }

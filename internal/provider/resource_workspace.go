@@ -77,6 +77,10 @@ func (r *workspaceResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 }
 
 func (r *workspaceResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	if r.client == nil {
+		addProviderNotConfiguredError(&resp.Diagnostics)
+		return
+	}
 	var plan workspaceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
@@ -93,6 +97,10 @@ func (r *workspaceResource) Create(ctx context.Context, req resource.CreateReque
 }
 
 func (r *workspaceResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	if r.client == nil {
+		addProviderNotConfiguredError(&resp.Diagnostics)
+		return
+	}
 	var state workspaceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
@@ -116,6 +124,10 @@ func (r *workspaceResource) Read(ctx context.Context, req resource.ReadRequest, 
 }
 
 func (r *workspaceResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	if r.client == nil {
+		addProviderNotConfiguredError(&resp.Diagnostics)
+		return
+	}
 	var plan workspaceModel
 	var state workspaceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -133,6 +145,10 @@ func (r *workspaceResource) Update(ctx context.Context, req resource.UpdateReque
 }
 
 func (r *workspaceResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	if r.client == nil {
+		addProviderNotConfiguredError(&resp.Diagnostics)
+		return
+	}
 	var state workspaceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
@@ -178,9 +194,9 @@ func workspaceModelFromAPI(_ context.Context, workspace openrouter.Workspace, pr
 		DefaultTextModel:                stringValue(workspace.DefaultTextModel),
 		DefaultImageModel:               stringValue(workspace.DefaultImageModel),
 		DefaultProviderSort:             stringValue(workspace.DefaultProviderSort),
-		CreatedBy:                       types.StringValue(workspace.CreatedBy),
+		CreatedBy:                       stringValue(workspace.CreatedBy),
 		CreatedAt:                       types.StringValue(workspace.CreatedAt),
-		UpdatedAt:                       types.StringValue(workspace.UpdatedAt),
+		UpdatedAt:                       stringValue(workspace.UpdatedAt),
 		IsDataDiscountLoggingEnabled:    boolValue(workspace.IsDataDiscountLoggingEnabled),
 		IsObservabilityBroadcastEnabled: boolValue(workspace.IsObservabilityBroadcastEnabled),
 		IsObservabilityIOLoggingEnabled: boolValue(workspace.IsObservabilityIOLoggingEnabled),

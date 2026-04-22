@@ -75,6 +75,10 @@ func providerNestedAttributes() map[string]dschema.Attribute {
 }
 
 func (d *providersDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
+	if d.client == nil {
+		addProviderNotConfiguredError(&resp.Diagnostics)
+		return
+	}
 	providers, err := d.client.ListProviders(ctx)
 	if err != nil {
 		resp.Diagnostics.AddError("List OpenRouter providers failed", err.Error())
@@ -87,10 +91,10 @@ func (d *providersDataSource) Read(ctx context.Context, req datasource.ReadReque
 		state.Providers = append(state.Providers, providerItemModel{
 			Name:              types.StringValue(provider.Name),
 			Slug:              types.StringValue(provider.Slug),
-			PrivacyPolicyURL:  types.StringValue(provider.PrivacyPolicyURL),
-			TermsOfServiceURL: types.StringValue(provider.TermsOfServiceURL),
-			StatusPageURL:     types.StringValue(provider.StatusPageURL),
-			Headquarters:      types.StringValue(provider.Headquarters),
+			PrivacyPolicyURL:  stringValue(provider.PrivacyPolicyURL),
+			TermsOfServiceURL: stringValue(provider.TermsOfServiceURL),
+			StatusPageURL:     stringValue(provider.StatusPageURL),
+			Headquarters:      stringValue(provider.Headquarters),
 			Datacenters:       datacenters,
 		})
 	}

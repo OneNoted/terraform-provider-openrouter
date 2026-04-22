@@ -186,3 +186,19 @@ func TestIsNotFound(t *testing.T) {
 		t.Fatal("expected IsNotFound not to match 500 APIError")
 	}
 }
+
+func TestStringNumberAcceptsStringAndNumberJSON(t *testing.T) {
+	var payload struct {
+		StringValue StringNumber `json:"string_value"`
+		NumberValue StringNumber `json:"number_value"`
+	}
+	if err := json.Unmarshal([]byte(`{"string_value":"0.00003","number_value":0.00006}`), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(payload.StringValue), "0.00003"; got != want {
+		t.Fatalf("StringValue = %q, want %q", got, want)
+	}
+	if got, want := string(payload.NumberValue), "0.00006"; got != want {
+		t.Fatalf("NumberValue = %q, want %q", got, want)
+	}
+}

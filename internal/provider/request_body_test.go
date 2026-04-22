@@ -16,6 +16,16 @@ func TestAPIKeyRequestBodyOmitsUnconfiguredOptionalFields(t *testing.T) {
 	}
 }
 
+func TestAPIKeyCreateRequestBodyIncludesWorkspaceID(t *testing.T) {
+	body := apiKeyRequestBody(apiKeyModel{
+		Name:        types.StringValue("ci"),
+		WorkspaceID: types.StringValue("workspace-id"),
+	})
+	if got, want := body["workspace_id"], "workspace-id"; got != want {
+		t.Fatalf("workspace_id = %#v, want %#v", got, want)
+	}
+}
+
 func TestGuardrailRequestBodyOmitsUnconfiguredOptionalFields(t *testing.T) {
 	body, diags := guardrailRequestBody(context.Background(), guardrailModel{Name: types.StringValue("prod")})
 	if diags.HasError() {
@@ -64,16 +74,19 @@ func TestWorkspaceUpdateRequestBodyClearsNullableFields(t *testing.T) {
 
 func TestAPIKeyUpdateRequestBodyClearsNullableFields(t *testing.T) {
 	body := apiKeyUpdateRequestBody(
-		apiKeyModel{Name: types.StringValue("ci")},
-		apiKeyModel{Limit: types.Float64Value(10), LimitReset: types.StringValue("monthly"), ExpiresAt: types.StringValue("2030-01-01T00:00:00Z")},
+		apiKeyModel{Name: types.StringValue("ci"), WorkspaceID: types.StringValue("workspace-id"), ExpiresAt: types.StringValue("2031-01-01T00:00:00Z")},
+		apiKeyModel{WorkspaceID: types.StringValue("workspace-id"), Limit: types.Float64Value(10), LimitReset: types.StringValue("monthly"), ExpiresAt: types.StringValue("2030-01-01T00:00:00Z")},
 	)
-	for _, key := range []string{"limit", "limit_reset", "expires_at"} {
+	for _, key := range []string{"limit", "limit_reset"} {
 		if got, ok := body[key]; !ok || got != nil {
 			t.Fatalf("%s clear = %#v, present=%t; want null", key, got, ok)
 		}
 	}
 	if _, ok := body["workspace_id"]; ok {
-		t.Fatalf("workspace_id should be omitted when unset because API does not document null clearing")
+		t.Fatalf("workspace_id should be omitted on update because OpenRouter does not support moving keys between workspaces")
+	}
+	if _, ok := body["expires_at"]; ok {
+		t.Fatalf("expires_at should be omitted on update because OpenRouter does not support changing key expiration in-place")
 	}
 }
 
@@ -83,18 +96,18 @@ func TestGuardrailUpdateRequestBodyClearsNullableFields(t *testing.T) {
 		t.Fatalf("diagnostics: %v", diags)
 	}
 	body, diags := guardrailUpdateRequestBody(context.Background(),
-		guardrailModel{Name: types.StringValue("prod")},
-		guardrailModel{Description: types.StringValue("old"), AllowedProviders: oldProviders, EnforceZDR: types.BoolValue(true), LimitUSD: types.Float64Value(100), ResetInterval: types.StringValue("monthly")},
+		guardrailModel{Name: types.StringValue("prod"), WorkspaceID: types.StringValue("workspace-id")},
+		guardrailModel{WorkspaceID: types.StringValue("workspace-id"), Description: types.StringValue("old"), AllowedProviders: oldProviders, EnforceZDR: types.BoolValue(true), LimitUSD: types.Float64Value(100), ResetInterval: types.StringValue("monthly")},
 	)
 	if diags.HasError() {
 		t.Fatalf("diagnostics: %v", diags)
 	}
-	for _, key := range []string{"description", "allowed_providers", "enforce_zdr", "limit_usd"} {
+	for _, key := range []string{"description", "allowed_providers", "enforce_zdr", "limit_usd", "reset_interval"} {
 		if got, ok := body[key]; !ok || got != nil {
 			t.Fatalf("%s clear = %#v, present=%t; want null", key, got, ok)
 		}
 	}
-	if _, ok := body["reset_interval"]; ok {
-		t.Fatalf("reset_interval should be omitted when unset because API does not document null clearing")
+	if _, ok := body["workspace_id"]; ok {
+		t.Fatalf("workspace_id should be omitted on update because OpenRouter does not support moving guardrails between workspaces")
 	}
 }

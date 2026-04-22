@@ -163,3 +163,10 @@ func addNullableSetForUpdate(ctx context.Context, body map[string]any, key strin
 	body[key] = values
 	return nil
 }
+
+func addProviderNotConfiguredError(diags *diag.Diagnostics) {
+	diags.AddError(
+		"OpenRouter provider is not configured",
+		"The provider client was not available for this operation. Configure the openrouter provider with management_api_key or OPENROUTER_MANAGEMENT_API_KEY before using resources or data sources.",
+	)
+}

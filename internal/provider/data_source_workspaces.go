@@ -87,6 +87,10 @@ func workspaceNestedAttributes() map[string]dschema.Attribute {
 }
 
 func (d *workspacesDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
+	if d.client == nil {
+		addProviderNotConfiguredError(&resp.Diagnostics)
+		return
+	}
 	workspaces, err := d.client.ListWorkspaces(ctx)
 	if err != nil {
 		resp.Diagnostics.AddError("List OpenRouter workspaces failed", err.Error())
@@ -102,9 +106,9 @@ func (d *workspacesDataSource) Read(ctx context.Context, req datasource.ReadRequ
 			DefaultTextModel:                stringValue(workspace.DefaultTextModel),
 			DefaultImageModel:               stringValue(workspace.DefaultImageModel),
 			DefaultProviderSort:             stringValue(workspace.DefaultProviderSort),
-			CreatedBy:                       types.StringValue(workspace.CreatedBy),
+			CreatedBy:                       stringValue(workspace.CreatedBy),
 			CreatedAt:                       types.StringValue(workspace.CreatedAt),
-			UpdatedAt:                       types.StringValue(workspace.UpdatedAt),
+			UpdatedAt:                       stringValue(workspace.UpdatedAt),
 			IsDataDiscountLoggingEnabled:    boolValue(workspace.IsDataDiscountLoggingEnabled),
 			IsObservabilityBroadcastEnabled: boolValue(workspace.IsObservabilityBroadcastEnabled),
 			IsObservabilityIOLoggingEnabled: boolValue(workspace.IsObservabilityIOLoggingEnabled),

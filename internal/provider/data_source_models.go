@@ -113,6 +113,10 @@ func modelNestedAttributes() map[string]dschema.Attribute {
 }
 
 func (d *modelsDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
+	if d.client == nil {
+		addProviderNotConfiguredError(&resp.Diagnostics)
+		return
+	}
 	var config modelsDataSourceModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
 	if resp.Diagnostics.HasError() {
@@ -142,22 +146,22 @@ func (d *modelsDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 			Description:           types.StringValue(model.Description),
 			CanonicalSlug:         types.StringValue(model.CanonicalSlug),
 			ContextLength:         int64Value(model.ContextLength),
-			HuggingFaceID:         types.StringValue(model.HuggingFaceID),
+			HuggingFaceID:         stringValue(model.HuggingFaceID),
 			InputModalities:       inputModalities,
 			OutputModalities:      outputModalities,
 			Tokenizer:             types.StringValue(model.Architecture.Tokenizer),
-			InstructType:          types.StringValue(model.Architecture.InstructType),
+			InstructType:          stringValue(model.Architecture.InstructType),
 			TopProviderModerated:  boolValue(model.TopProvider.IsModerated),
 			TopProviderContext:    int64Value(model.TopProvider.ContextLength),
 			MaxCompletionTokens:   int64Value(model.TopProvider.MaxCompletionTokens),
-			PricingPrompt:         types.StringValue(model.Pricing.Prompt),
-			PricingCompletion:     types.StringValue(model.Pricing.Completion),
-			PricingImage:          types.StringValue(model.Pricing.Image),
-			PricingRequest:        types.StringValue(model.Pricing.Request),
-			PricingWebSearch:      types.StringValue(model.Pricing.WebSearch),
-			PricingReasoning:      types.StringValue(model.Pricing.InternalReasoning),
-			PricingCacheRead:      types.StringValue(model.Pricing.InputCacheRead),
-			PricingCacheWrite:     types.StringValue(model.Pricing.InputCacheWrite),
+			PricingPrompt:         types.StringValue(string(model.Pricing.Prompt)),
+			PricingCompletion:     types.StringValue(string(model.Pricing.Completion)),
+			PricingImage:          types.StringValue(string(model.Pricing.Image)),
+			PricingRequest:        types.StringValue(string(model.Pricing.Request)),
+			PricingWebSearch:      types.StringValue(string(model.Pricing.WebSearch)),
+			PricingReasoning:      types.StringValue(string(model.Pricing.InternalReasoning)),
+			PricingCacheRead:      types.StringValue(string(model.Pricing.InputCacheRead)),
+			PricingCacheWrite:     types.StringValue(string(model.Pricing.InputCacheWrite)),
 			SupportedParameters:   supportedParameters,
 			DefaultParametersJSON: jsonString(model.DefaultParameters),
 			PerRequestLimitsJSON:  jsonString(model.PerRequestLimits),

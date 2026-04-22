@@ -33,11 +33,11 @@ resource "openrouter_api_key" "example" {
 ### Optional
 
 - `disabled` (Boolean) Whether the key is disabled.
-- `expires_at` (String) Optional UTC expiration timestamp.
+- `expires_at` (String) Optional UTC expiration timestamp. Changes require replacing the key because OpenRouter does not support updating expiration in-place.
 - `include_byok_in_limit` (Boolean) Whether BYOK usage counts against the key limit.
 - `limit` (Number) Optional spending limit in USD.
 - `limit_reset` (String) Limit reset interval (`daily`, `weekly`, `monthly`) or null for no reset.
-- `workspace_id` (String) Optional workspace ID for APIs/accounts that support workspace-scoped key creation.
+- `workspace_id` (String) Optional workspace ID for APIs/accounts that support workspace-scoped key creation. Defaults to OpenRouter's default workspace if omitted. Changes require replacing the key because OpenRouter does not support moving keys between workspaces.
 
 ### Read-Only
 

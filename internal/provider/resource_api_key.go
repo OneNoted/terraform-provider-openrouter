@@ -6,6 +6,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	rschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/openrouter/terraform-provider-openrouter/internal/openrouter"
@@ -72,12 +75,12 @@ func (r *apiKeyResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 			"hash":                  rschema.StringAttribute{Computed: true, MarkdownDescription: "Stable OpenRouter API key hash/identifier."},
 			"name":                  rschema.StringAttribute{Required: true, MarkdownDescription: "API key display name."},
 			"label":                 rschema.StringAttribute{Computed: true, MarkdownDescription: "OpenRouter label for the key."},
-			"workspace_id":          rschema.StringAttribute{Optional: true, MarkdownDescription: "Optional workspace ID for APIs/accounts that support workspace-scoped key creation."},
-			"disabled":              rschema.BoolAttribute{Optional: true, Computed: true, MarkdownDescription: "Whether the key is disabled."},
+			"workspace_id":          rschema.StringAttribute{Optional: true, Computed: true, PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown(), stringplanmodifier.RequiresReplace()}, MarkdownDescription: "Optional workspace ID for APIs/accounts that support workspace-scoped key creation. Defaults to OpenRouter's default workspace if omitted. Changes require replacing the key because OpenRouter does not support moving keys between workspaces."},
+			"disabled":              rschema.BoolAttribute{Optional: true, Computed: true, PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()}, MarkdownDescription: "Whether the key is disabled."},
 			"limit":                 rschema.Float64Attribute{Optional: true, MarkdownDescription: "Optional spending limit in USD."},
 			"limit_remaining":       rschema.Float64Attribute{Computed: true, MarkdownDescription: "Remaining limit returned by OpenRouter."},
 			"limit_reset":           rschema.StringAttribute{Optional: true, MarkdownDescription: "Limit reset interval (`daily`, `weekly`, `monthly`) or null for no reset."},
-			"include_byok_in_limit": rschema.BoolAttribute{Optional: true, Computed: true, MarkdownDescription: "Whether BYOK usage counts against the key limit."},
+			"include_byok_in_limit": rschema.BoolAttribute{Optional: true, Computed: true, PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()}, MarkdownDescription: "Whether BYOK usage counts against the key limit."},
 			"usage":                 rschema.Float64Attribute{Computed: true, MarkdownDescription: "Total usage returned by OpenRouter."},
 			"usage_daily":           rschema.Float64Attribute{Computed: true, MarkdownDescription: "Daily usage returned by OpenRouter."},
 			"usage_weekly":          rschema.Float64Attribute{Computed: true, MarkdownDescription: "Weekly usage returned by OpenRouter."},
@@ -88,13 +91,17 @@ func (r *apiKeyResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 			"byok_usage_monthly":    rschema.Float64Attribute{Computed: true, MarkdownDescription: "Monthly BYOK usage returned by OpenRouter."},
 			"created_at":            rschema.StringAttribute{Computed: true, MarkdownDescription: "Creation timestamp returned by OpenRouter."},
 			"updated_at":            rschema.StringAttribute{Computed: true, MarkdownDescription: "Last update timestamp returned by OpenRouter."},
-			"expires_at":            rschema.StringAttribute{Optional: true, Computed: true, MarkdownDescription: "Optional UTC expiration timestamp."},
+			"expires_at":            rschema.StringAttribute{Optional: true, Computed: true, PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown(), stringplanmodifier.RequiresReplace()}, MarkdownDescription: "Optional UTC expiration timestamp. Changes require replacing the key because OpenRouter does not support updating expiration in-place."},
 			"creator_user_id":       rschema.StringAttribute{Computed: true, MarkdownDescription: "Creator user ID returned by OpenRouter."},
 		},
 	}
 }
 
 func (r *apiKeyResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	if r.client == nil {
+		addProviderNotConfiguredError(&resp.Diagnostics)
+		return
+	}
 	var plan apiKeyModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
@@ -110,6 +117,10 @@ func (r *apiKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 }
 
 func (r *apiKeyResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	if r.client == nil {
+		addProviderNotConfiguredError(&resp.Diagnostics)
+		return
+	}
 	var state apiKeyModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
@@ -129,6 +140,10 @@ func (r *apiKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 }
 
 func (r *apiKeyResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	if r.client == nil {
+		addProviderNotConfiguredError(&resp.Diagnostics)
+		return
+	}
 	var plan apiKeyModel
 	var state apiKeyModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -146,6 +161,10 @@ func (r *apiKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 }
 
 func (r *apiKeyResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	if r.client == nil {
+		addProviderNotConfiguredError(&resp.Diagnostics)
+		return
+	}
 	var state apiKeyModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
@@ -175,12 +194,10 @@ func apiKeyRequestBody(plan apiKeyModel) map[string]any {
 func apiKeyUpdateRequestBody(plan, prior apiKeyModel) map[string]any {
 	body := map[string]any{}
 	addStringIfKnown(body, "name", plan.Name)
-	addStringIfKnown(body, "workspace_id", plan.WorkspaceID)
 	addBoolIfKnown(body, "disabled", plan.Disabled)
 	addNullableFloatForUpdate(body, "limit", plan.Limit, prior.Limit)
 	addNullableStringForUpdate(body, "limit_reset", plan.LimitReset, prior.LimitReset)
 	addBoolIfKnown(body, "include_byok_in_limit", plan.IncludeBYOKInLimit)
-	addNullableStringForUpdate(body, "expires_at", plan.ExpiresAt, prior.ExpiresAt)
 	return body
 }
 
@@ -220,8 +237,8 @@ func apiKeyModelFromAPI(apiKey openrouter.APIKey, prior apiKeyModel) apiKeyModel
 		BYOKUsageWeekly:    floatValue(apiKey.BYOKUsageWeekly),
 		BYOKUsageMonthly:   floatValue(apiKey.BYOKUsageMonthly),
 		CreatedAt:          types.StringValue(apiKey.CreatedAt),
-		UpdatedAt:          types.StringValue(apiKey.UpdatedAt),
+		UpdatedAt:          stringValue(apiKey.UpdatedAt),
 		ExpiresAt:          expiresAt,
-		CreatorUserID:      types.StringValue(apiKey.CreatorUserID),
+		CreatorUserID:      stringValue(apiKey.CreatorUserID),
 	}
 }

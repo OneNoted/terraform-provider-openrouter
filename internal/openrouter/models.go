@@ -1,7 +1,9 @@
 package openrouter
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -25,9 +27,9 @@ type Workspace struct {
 	DefaultTextModel                *string `json:"default_text_model"`
 	DefaultImageModel               *string `json:"default_image_model"`
 	DefaultProviderSort             *string `json:"default_provider_sort"`
-	CreatedBy                       string  `json:"created_by"`
+	CreatedBy                       *string `json:"created_by"`
 	CreatedAt                       string  `json:"created_at"`
-	UpdatedAt                       string  `json:"updated_at"`
+	UpdatedAt                       *string `json:"updated_at"`
 	IsDataDiscountLoggingEnabled    *bool   `json:"is_data_discount_logging_enabled"`
 	IsObservabilityBroadcastEnabled *bool   `json:"is_observability_broadcast_enabled"`
 	IsObservabilityIOLoggingEnabled *bool   `json:"is_observability_io_logging_enabled"`
@@ -112,9 +114,9 @@ type APIKey struct {
 	BYOKUsageWeekly    *float64 `json:"byok_usage_weekly"`
 	BYOKUsageMonthly   *float64 `json:"byok_usage_monthly"`
 	CreatedAt          string   `json:"created_at"`
-	UpdatedAt          string   `json:"updated_at"`
+	UpdatedAt          *string  `json:"updated_at"`
 	ExpiresAt          *string  `json:"expires_at"`
-	CreatorUserID      string   `json:"creator_user_id"`
+	CreatorUserID      *string  `json:"creator_user_id"`
 }
 
 func (c *Client) CreateAPIKey(ctx context.Context, body map[string]any) (*APIKey, error) {
@@ -187,7 +189,7 @@ type Guardrail struct {
 	LimitUSD         *float64 `json:"limit_usd"`
 	ResetInterval    *string  `json:"reset_interval"`
 	CreatedAt        string   `json:"created_at"`
-	UpdatedAt        string   `json:"updated_at"`
+	UpdatedAt        *string  `json:"updated_at"`
 }
 
 func (c *Client) CreateGuardrail(ctx context.Context, body map[string]any) (*Guardrail, error) {
@@ -245,10 +247,10 @@ type providersResponse struct {
 type Provider struct {
 	Name              string   `json:"name"`
 	Slug              string   `json:"slug"`
-	PrivacyPolicyURL  string   `json:"privacy_policy_url"`
-	TermsOfServiceURL string   `json:"terms_of_service_url"`
-	StatusPageURL     string   `json:"status_page_url"`
-	Headquarters      string   `json:"headquarters"`
+	PrivacyPolicyURL  *string  `json:"privacy_policy_url"`
+	TermsOfServiceURL *string  `json:"terms_of_service_url"`
+	StatusPageURL     *string  `json:"status_page_url"`
+	Headquarters      *string  `json:"headquarters"`
 	Datacenters       []string `json:"datacenters"`
 }
 
@@ -272,7 +274,7 @@ type Model struct {
 	Description         string            `json:"description"`
 	CanonicalSlug       string            `json:"canonical_slug"`
 	ContextLength       *int64            `json:"context_length"`
-	HuggingFaceID       string            `json:"hugging_face_id"`
+	HuggingFaceID       *string           `json:"hugging_face_id"`
 	Architecture        ModelArchitecture `json:"architecture"`
 	TopProvider         ModelTopProvider  `json:"top_provider"`
 	Pricing             ModelPricing      `json:"pricing"`
@@ -285,7 +287,7 @@ type ModelArchitecture struct {
 	InputModalities  []string `json:"input_modalities"`
 	OutputModalities []string `json:"output_modalities"`
 	Tokenizer        string   `json:"tokenizer"`
-	InstructType     string   `json:"instruct_type"`
+	InstructType     *string  `json:"instruct_type"`
 }
 
 type ModelTopProvider struct {
@@ -295,14 +297,14 @@ type ModelTopProvider struct {
 }
 
 type ModelPricing struct {
-	Prompt            string `json:"prompt"`
-	Completion        string `json:"completion"`
-	Image             string `json:"image"`
-	Request           string `json:"request"`
-	WebSearch         string `json:"web_search"`
-	InternalReasoning string `json:"internal_reasoning"`
-	InputCacheRead    string `json:"input_cache_read"`
-	InputCacheWrite   string `json:"input_cache_write"`
+	Prompt            StringNumber `json:"prompt"`
+	Completion        StringNumber `json:"completion"`
+	Image             StringNumber `json:"image"`
+	Request           StringNumber `json:"request"`
+	WebSearch         StringNumber `json:"web_search"`
+	InternalReasoning StringNumber `json:"internal_reasoning"`
+	InputCacheRead    StringNumber `json:"input_cache_read"`
+	InputCacheWrite   StringNumber `json:"input_cache_write"`
 }
 
 func (c *Client) ListModels(ctx context.Context, category string) ([]Model, error) {
@@ -315,4 +317,27 @@ func (c *Client) ListModels(ctx context.Context, category string) ([]Model, erro
 		return nil, err
 	}
 	return response.Data, nil
+}
+
+// StringNumber decodes OpenAPI fields that may be returned as either JSON strings or numbers.
+type StringNumber string
+
+func (s *StringNumber) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(data, []byte("null")) {
+		*s = ""
+		return nil
+	}
+	var text string
+	if err := json.Unmarshal(data, &text); err == nil {
+		*s = StringNumber(text)
+		return nil
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	var number json.Number
+	if err := decoder.Decode(&number); err == nil {
+		*s = StringNumber(number.String())
+		return nil
+	}
+	return fmt.Errorf("expected string or number, got %s", string(data))
 }

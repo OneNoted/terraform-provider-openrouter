@@ -41,7 +41,7 @@ resource "openrouter_guardrail" "example" {
 - `ignored_providers` (Set of String) Optional list of provider IDs to exclude from routing.
 - `limit_usd` (Number) Spending limit in USD.
 - `reset_interval` (String) Budget reset interval (`daily`, `weekly`, or `monthly`).
-- `workspace_id` (String) Workspace ID containing the guardrail. Defaults to OpenRouter's default workspace if omitted.
+- `workspace_id` (String) Workspace ID containing the guardrail. Defaults to OpenRouter's default workspace if omitted. Changes require replacing the guardrail because OpenRouter does not support moving guardrails between workspaces.
 
 ### Read-Only
 
